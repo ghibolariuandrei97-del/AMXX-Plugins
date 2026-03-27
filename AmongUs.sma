@@ -20,7 +20,7 @@ new cvar_imp_hp, cvar_imp_money;
 new const g_RandomWeapons[][] = { "weapon_m4a1", "weapon_ak47", "weapon_mp5navy", "weapon_awp", "weapon_famas", "weapon_galil" };
 
 public plugin_init() {
-    register_plugin("Among Us Hybrid Final", "10.2", "Gemini");
+    register_plugin("Among Us Hybrid", "b0.1", "Terra_Fan");
 
     cvar_cooldown = register_cvar("amx_au_kill_cooldown", "30.0");
     cvar_max_imp = register_cvar("amx_au_max_impostors", "2");
