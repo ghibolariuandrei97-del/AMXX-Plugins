@@ -20,7 +20,7 @@ new g_FwdBecomeSage;
 
 public plugin_init()
 {
-    register_plugin("Great Sage", "6.4", "ChatGPT");
+    register_plugin("Great Sage", "v0.1", "AI");
 
     register_clcmd("say /sage", "cmd_sage");
     register_clcmd("say /sagehelp", "cmd_help");
