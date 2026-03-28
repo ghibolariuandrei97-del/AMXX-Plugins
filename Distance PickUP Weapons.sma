@@ -4,28 +4,58 @@
 #include <fakemeta>
 #include <xs>
 
-#define PLUGIN "Distance PickUp"
-#define VERSION "1.0"
-#define AUTHOR "AI"
+#define PLUGIN "E-Key Pickup (Optimized)"
+#define VERSION "16.0"
+#define AUTHOR "Gemini"
 
 #define TASK_HUD 1000
 
+// Offsets
 #define m_flNextPickup 36
 #define m_iId 43
 #define m_iItem 34 
 #define m_iClip 51
 #define m_rgpPlayerItems_slot0 34 
 
+// --- GLOBAL CONSTANTS ---
+
+// Armoury Data
+new const ARMOURY_NAMES[][] = { 
+    "MP5", "TMP", "P90", "MAC10", "AK47", "SG552", "M4A1", "AUG", "SCOUT", 
+    "AWP", "G3SG1", "SG550", "M249", "M3", "XM1014", "FLASHBANG", "HEGRENADE", 
+    "SMOKE", "ARMOR", "ARMOR+HELMET", "SHIELD" 
+};
+
+new const ARMOURY_FULL[][] = { 
+    "weapon_mp5navy", "weapon_tmp", "weapon_p90", "weapon_mac10", "weapon_ak47", 
+    "weapon_sg552", "weapon_m4a1", "weapon_aug", "weapon_scout", "weapon_awp", 
+    "weapon_g3sg1", "weapon_sg550", "weapon_m249", "weapon_m3", "weapon_xm1014", 
+    "weapon_flashbang", "weapon_hegrenade", "weapon_smokegrenade", "item_kevlar", 
+    "item_assaultsuit", "weapon_shield" 
+};
+
+// Weapon Categorization
+new const PRIMARY_WEAPONS[][] = { 
+    "m4a1", "ak47", "awp", "mp5", "p90", "m3", "xm1014", "scout", "aug", 
+    "sg552", "famas", "galil", "sg550", "g3sg1", "m249" 
+};
+
+new const SECONDARY_WEAPONS[][] = { 
+    "deagle", "usp", "glock", "p228", "elite", "fiveseven" 
+};
+
 new g_pcvar_distance;
 
 public plugin_init() {
     register_plugin(PLUGIN, VERSION, AUTHOR);
-    g_pcvar_distance = register_cvar("amx_pickup_dist", "600.0");
+    g_pcvar_distance = register_cvar("amx_pickup_dist", "300.0");
     
     RegisterHam(Ham_Spawn, "player", "fw_PlayerSpawn_Post", 1);
     RegisterHam(Ham_Killed, "player", "fw_PlayerKilled_Post", 1);
     register_forward(FM_CmdStart, "fwd_CmdStart");
 }
+
+// --- HUD & BUTTON LOGIC ---
 
 public fw_PlayerSpawn_Post(id) {
     if (!is_user_alive(id)) return;
@@ -67,6 +97,8 @@ public fwd_CmdStart(id, uc_handle, seed) {
     return FMRES_IGNORED;
 }
 
+// --- WEAPON TRANSFER LOGIC ---
+
 stock transfer_weapon(id, ent) {
     static classname[32], weapon_fullname[32];
     pev(ent, pev_classname, classname, charsmax(classname));
@@ -76,18 +108,13 @@ stock transfer_weapon(id, ent) {
         if (pev_valid(weapon_ent)) {
             pev(weapon_ent, pev_classname, weapon_fullname, charsmax(weapon_fullname));
             
-            // Get ammo info from the ground gun
             new iClip = get_pdata_int(weapon_ent, m_iClip, 4);
             new wid = get_pdata_int(weapon_ent, m_iId, 4);
             new InventorySlotType:slot = rg_get_weapon_info(WeaponIdType:wid, WI_SLOT);
             
-            // KEEP YOUR DROP LOGIC
             rg_drop_items_by_slot(id, slot);
-            
-            // GIVE NEW WEAPON DIRECTLY
             rg_give_item(id, weapon_fullname, GT_APPEND);
             
-            // Transfer the clip/ammo to the new weapon in hand
             new new_wep = -1;
             while ((new_wep = engfunc(EngFunc_FindEntityByString, new_wep, "classname", weapon_fullname)) != 0) {
                 if (pev(new_wep, pev_owner) == id) {
@@ -95,20 +122,16 @@ stock transfer_weapon(id, ent) {
                     break;
                 }
             }
-            
-            // Safely remove the one on the ground
             set_pev(ent, pev_flags, pev(ent, pev_flags) | FL_KILLME);
         }
     } else if (equal(classname, "armoury_entity")) {
         get_clean_weapon_name(ent, weapon_fullname, charsmax(weapon_fullname), true);
         
-        // Slot logic for map weapons
         if (is_primary(weapon_fullname)) rg_drop_items_by_slot(id, PRIMARY_WEAPON_SLOT);
         else if (is_secondary(weapon_fullname)) rg_drop_items_by_slot(id, PISTOL_SLOT);
 
         rg_give_item(id, weapon_fullname, GT_APPEND);
         
-        // Armoury entities on maps like fy_snow should hide/respawn rather than delete
         set_pev(ent, pev_effects, pev(ent, pev_effects) | EF_NODRAW);
         set_pev(ent, pev_solid, SOLID_NOT);
         set_task(20.0, "respawn_armoury", ent);
@@ -121,6 +144,8 @@ public respawn_armoury(ent) {
         set_pev(ent, pev_solid, SOLID_TRIGGER);
     }
 }
+
+// --- HELPER FUNCTIONS ---
 
 stock get_weapon_in_box(box_ent) {
     for (new i = 0; i < 6; i++) {
@@ -182,19 +207,23 @@ stock get_clean_weapon_name(ent, name[], len, bool:full_name = false) {
         } else copy(name, len, "WEAPON");
     } else if (equal(classname, "armoury_entity")) {
         new type = get_pdata_int(ent, m_iItem, 4); 
-        static const armoury_names[][] = { "MP5", "TMP", "P90", "MAC10", "AK47", "SG552", "M4A1", "AUG", "SCOUT", "AWP", "G3SG1", "SG550", "M249", "M3", "XM1014", "FLASHBANG", "HEGRENADE", "SMOKE", "ARMOR", "ARMOR+HELMET", "SHIELD" };
-        static const armoury_full[][] = { "weapon_mp5navy", "weapon_tmp", "weapon_p90", "weapon_mac10", "weapon_ak47", "weapon_sg552", "weapon_m4a1", "weapon_aug", "weapon_scout", "weapon_awp", "weapon_g3sg1", "weapon_sg550", "weapon_m249", "weapon_m3", "weapon_xm1014", "weapon_flashbang", "weapon_hegrenade", "weapon_smokegrenade", "item_kevlar", "item_assaultsuit", "weapon_shield" };
-        if (0 <= type < sizeof(armoury_names)) {
-            copy(name, len, full_name ? armoury_full[type] : armoury_names[type]);
+        if (0 <= type < sizeof(ARMOURY_NAMES)) {
+            copy(name, len, full_name ? ARMOURY_FULL[type] : ARMOURY_NAMES[type]);
         }
     }
 }
 
+// Optimized Category Checks
 bool:is_primary(const name[]) {
-    if (containi(name, "m4a1") != -1 || containi(name, "ak47") != -1 || containi(name, "awp") != -1 || containi(name, "mp5") != -1 || containi(name, "p90") != -1 || containi(name, "m3") != -1 || containi(name, "xm1014") != -1 || containi(name, "scout") != -1) return true;
+    for (new i = 0; i < sizeof(PRIMARY_WEAPONS); i++) {
+        if (containi(name, PRIMARY_WEAPONS[i]) != -1) return true;
+    }
     return false;
 }
+
 bool:is_secondary(const name[]) {
-    if (containi(name, "deagle") != -1 || containi(name, "usp") != -1 || containi(name, "glock") != -1 || containi(name, "p228") != -1 || containi(name, "elite") != -1 || containi(name, "fiveseven") != -1) return true;
+    for (new i = 0; i < sizeof(SECONDARY_WEAPONS); i++) {
+        if (containi(name, SECONDARY_WEAPONS[i]) != -1) return true;
+    }
     return false;
 }
