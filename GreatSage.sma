@@ -51,11 +51,14 @@ public plugin_natives() {
     register_native("is_user_sage", "native_is_user_sage");
 }
 
-public native_is_user_sage(plugin, params) {
-    new id = get_param(1); // Primul parametru trimis
-    if (!is_user_connected(id)) return 0;
+public native_is_user_sage(plugin, params)
+{
+    new id = get_param(1);
     
-    return g_IsSage[id];
+    if (!is_user_connected(id)) 
+        return 0; // Nu e conectat, deci sigur nu e Sage
+        
+    return g_IsSage[id] ? 1 : 0; // Returneaza 1 daca e Sage, 0 daca nu e
 }
 
 public cmd_help(id)
