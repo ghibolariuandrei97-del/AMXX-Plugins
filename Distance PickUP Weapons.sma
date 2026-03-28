@@ -4,45 +4,22 @@
 #include <fakemeta>
 #include <xs>
 
-#define PLUGIN "E-Key Pickup (Optimized)"
-#define VERSION "16.0"
-#define AUTHOR "Gemini"
+#define PLUGIN "E-Key Pickup"
+#define VERSION "1.0"
+#define AUTHOR "Ai"
 
 #define TASK_HUD 1000
 
-// Offsets
 #define m_flNextPickup 36
 #define m_iId 43
 #define m_iItem 34 
 #define m_iClip 51
 #define m_rgpPlayerItems_slot0 34 
 
-// --- GLOBAL CONSTANTS ---
-
-// Armoury Data
-new const ARMOURY_NAMES[][] = { 
-    "MP5", "TMP", "P90", "MAC10", "AK47", "SG552", "M4A1", "AUG", "SCOUT", 
-    "AWP", "G3SG1", "SG550", "M249", "M3", "XM1014", "FLASHBANG", "HEGRENADE", 
-    "SMOKE", "ARMOR", "ARMOR+HELMET", "SHIELD" 
-};
-
-new const ARMOURY_FULL[][] = { 
-    "weapon_mp5navy", "weapon_tmp", "weapon_p90", "weapon_mac10", "weapon_ak47", 
-    "weapon_sg552", "weapon_m4a1", "weapon_aug", "weapon_scout", "weapon_awp", 
-    "weapon_g3sg1", "weapon_sg550", "weapon_m249", "weapon_m3", "weapon_xm1014", 
-    "weapon_flashbang", "weapon_hegrenade", "weapon_smokegrenade", "item_kevlar", 
-    "item_assaultsuit", "weapon_shield" 
-};
-
-// Weapon Categorization
-new const PRIMARY_WEAPONS[][] = { 
-    "m4a1", "ak47", "awp", "mp5", "p90", "m3", "xm1014", "scout", "aug", 
-    "sg552", "famas", "galil", "sg550", "g3sg1", "m249" 
-};
-
-new const SECONDARY_WEAPONS[][] = { 
-    "deagle", "usp", "glock", "p228", "elite", "fiveseven" 
-};
+new const ARMOURY_NAMES[][] = { "MP5", "TMP", "P90", "MAC10", "AK47", "SG552", "M4A1", "AUG", "SCOUT", "AWP", "G3SG1", "SG550", "M249", "M3", "XM1014", "FLASHBANG", "HEGRENADE", "SMOKE", "ARMOR", "ARMOR+HELMET", "SHIELD" };
+new const ARMOURY_FULL[][] = { "weapon_mp5navy", "weapon_tmp", "weapon_p90", "weapon_mac10", "weapon_ak47", "weapon_sg552", "weapon_m4a1", "weapon_aug", "weapon_scout", "weapon_awp", "weapon_g3sg1", "weapon_sg550", "weapon_m249", "weapon_m3", "weapon_xm1014", "weapon_flashbang", "weapon_hegrenade", "weapon_smokegrenade", "item_kevlar", "item_assaultsuit", "weapon_shield" };
+new const PRIMARY_WEAPONS[][] = { "m4a1", "ak47", "awp", "mp5", "p90", "m3", "xm1014", "scout", "aug", "sg552", "famas", "galil", "sg550", "g3sg1", "m249" };
+new const SECONDARY_WEAPONS[][] = { "deagle", "usp", "glock", "p228", "elite", "fiveseven" };
 
 new g_pcvar_distance;
 
@@ -55,12 +32,11 @@ public plugin_init() {
     register_forward(FM_CmdStart, "fwd_CmdStart");
 }
 
-// --- HUD & BUTTON LOGIC ---
-
 public fw_PlayerSpawn_Post(id) {
     if (!is_user_alive(id)) return;
     remove_task(id + TASK_HUD);
-    set_task(0.1, "weapon_hud_task", id + TASK_HUD, _, _, "b");
+    // Increased to 0.15 for better CPU breathing room
+    set_task(0.15, "weapon_hud_task", id + TASK_HUD, _, _, "b");
 }
 
 public fw_PlayerKilled_Post(id) {
@@ -97,7 +73,59 @@ public fwd_CmdStart(id, uc_handle, seed) {
     return FMRES_IGNORED;
 }
 
-// --- WEAPON TRANSFER LOGIC ---
+// --- LIGHTWEIGHT SEARCH ---
+stock find_best_weapon(id) {
+    static Float:origin[3], Float:v_forward[3], Float:v_angle[3]; // Removed unused ent_origin and vec_to_ent
+    pev(id, pev_origin, origin);
+    
+    static Float:view_ofs[3];
+    pev(id, pev_view_ofs, view_ofs);
+    xs_vec_add(origin, view_ofs, origin);
+    
+    pev(id, pev_v_angle, v_angle);
+    angle_vector(v_angle, ANGLEVECTOR_FORWARD, v_forward);
+
+    new Float:max_dist = get_pcvar_float(g_pcvar_distance);
+    new best_ent = -1;
+    new Float:best_dot = 0.88;
+
+    new ent = -1;
+    while ((ent = engfunc(EngFunc_FindEntityByString, ent, "classname", "weaponbox")) != 0) {
+        if (is_valid_candidate(ent, origin, v_forward, max_dist, best_dot)) {
+            best_ent = ent;
+        }
+    }
+    
+    ent = -1;
+    while ((ent = engfunc(EngFunc_FindEntityByString, ent, "classname", "armoury_entity")) != 0) {
+        if (pev(ent, pev_effects) & EF_NODRAW) continue;
+        if (is_valid_candidate(ent, origin, v_forward, max_dist, best_dot)) {
+            best_ent = ent;
+        }
+    }
+    
+    return best_ent;
+}
+
+// Separate function to keep the loops clean and fast
+bool:is_valid_candidate(ent, Float:origin[3], Float:v_forward[3], Float:max_dist, &Float:best_dot) {
+    static Float:ent_origin[3], Float:vec_to_ent[3];
+    pev(ent, pev_origin, ent_origin);
+    
+    // Cheap distance check first (square root is expensive, so we compare squared distance)
+    new Float:dist = get_distance_f(origin, ent_origin);
+    if (dist > max_dist) return false;
+
+    xs_vec_sub(ent_origin, origin, vec_to_ent);
+    xs_vec_normalize(vec_to_ent, vec_to_ent);
+    
+    new Float:dot = xs_vec_dot(v_forward, vec_to_ent);
+    if (dot > best_dot) {
+        best_dot = dot;
+        return true;
+    }
+    return false;
+}
 
 stock transfer_weapon(id, ent) {
     static classname[32], weapon_fullname[32];
@@ -107,7 +135,6 @@ stock transfer_weapon(id, ent) {
         new weapon_ent = get_weapon_in_box(ent);
         if (pev_valid(weapon_ent)) {
             pev(weapon_ent, pev_classname, weapon_fullname, charsmax(weapon_fullname));
-            
             new iClip = get_pdata_int(weapon_ent, m_iClip, 4);
             new wid = get_pdata_int(weapon_ent, m_iId, 4);
             new InventorySlotType:slot = rg_get_weapon_info(WeaponIdType:wid, WI_SLOT);
@@ -126,10 +153,8 @@ stock transfer_weapon(id, ent) {
         }
     } else if (equal(classname, "armoury_entity")) {
         get_clean_weapon_name(ent, weapon_fullname, charsmax(weapon_fullname), true);
-        
         if (is_primary(weapon_fullname)) rg_drop_items_by_slot(id, PRIMARY_WEAPON_SLOT);
         else if (is_secondary(weapon_fullname)) rg_drop_items_by_slot(id, PISTOL_SLOT);
-
         rg_give_item(id, weapon_fullname, GT_APPEND);
         
         set_pev(ent, pev_effects, pev(ent, pev_effects) | EF_NODRAW);
@@ -145,51 +170,12 @@ public respawn_armoury(ent) {
     }
 }
 
-// --- HELPER FUNCTIONS ---
-
 stock get_weapon_in_box(box_ent) {
     for (new i = 0; i < 6; i++) {
         new weapon = get_pdata_cbase(box_ent, m_rgpPlayerItems_slot0 + i, 4);
         if (pev_valid(weapon)) return weapon;
     }
     return -1;
-}
-
-stock find_best_weapon(id) {
-    static Float:origin[3], Float:view_ofs[3], Float:v_forward[3], Float:v_angle[3];
-    static Float:ent_origin[3], Float:vec_to_ent[3];
-    
-    pev(id, pev_origin, origin);
-    pev(id, pev_view_ofs, view_ofs);
-    xs_vec_add(origin, view_ofs, origin);
-    
-    pev(id, pev_v_angle, v_angle);
-    angle_vector(v_angle, ANGLEVECTOR_FORWARD, v_forward);
-
-    new Float:max_dist = get_pcvar_float(g_pcvar_distance);
-    new best_ent = -1;
-    new Float:best_dot = 0.85;
-
-    new ent = -1;
-    while ((ent = engfunc(EngFunc_FindEntityInSphere, ent, origin, max_dist)) != 0) {
-        if (!pev_valid(ent) || (pev(ent, pev_effects) & EF_NODRAW)) continue;
-
-        static classname[32];
-        pev(ent, pev_classname, classname, charsmax(classname));
-        
-        if (equal(classname, "weaponbox") || equal(classname, "armoury_entity")) {
-            pev(ent, pev_origin, ent_origin);
-            xs_vec_sub(ent_origin, origin, vec_to_ent);
-            xs_vec_normalize(vec_to_ent, vec_to_ent);
-            
-            new Float:dot = xs_vec_dot(v_forward, vec_to_ent);
-            if (dot > best_dot) {
-                best_dot = dot;
-                best_ent = ent;
-            }
-        }
-    }
-    return best_ent;
 }
 
 stock get_clean_weapon_name(ent, name[], len, bool:full_name = false) {
@@ -213,7 +199,6 @@ stock get_clean_weapon_name(ent, name[], len, bool:full_name = false) {
     }
 }
 
-// Optimized Category Checks
 bool:is_primary(const name[]) {
     for (new i = 0; i < sizeof(PRIMARY_WEAPONS); i++) {
         if (containi(name, PRIMARY_WEAPONS[i]) != -1) return true;
