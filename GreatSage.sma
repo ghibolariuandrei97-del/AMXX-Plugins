@@ -16,10 +16,11 @@ new Float:g_LaserEnd[MAX_ENTS][3];
 new g_Sprite;
 new g_pSageSpeed;
 new g_pSageGlow;
+new g_FwdBecomeSage;
 
 public plugin_init()
 {
-    register_plugin("Great Sage", "v0.1", "AI");
+    register_plugin("Great Sage", "6.4", "ChatGPT");
 
     register_clcmd("say /sage", "cmd_sage");
     register_clcmd("say /sagehelp", "cmd_help");
@@ -32,6 +33,7 @@ public plugin_init()
 
     register_forward(FM_CmdStart, "fw_CmdStart");
     register_forward(FM_Think, "fw_Think");
+    g_FwdBecomeSage = CreateMultiForward("user_become_sage", ET_IGNORE, FP_CELL);
 
     register_event("HLTV", "round_start", "a", "1=0", "2=0");
     register_event("CurWeapon", "ev_curweapon", "be", "1=1");
@@ -43,6 +45,17 @@ public plugin_init()
 public plugin_precache()
 {
     g_Sprite = precache_model("sprites/laserbeam.spr");
+}
+
+public plugin_natives() {
+    register_native("is_user_sage", "native_is_user_sage");
+}
+
+public native_is_user_sage(plugin, params) {
+    new id = get_param(1); // Primul parametru trimis
+    if (!is_user_connected(id)) return 0;
+    
+    return g_IsSage[id];
 }
 
 public cmd_help(id)
@@ -81,6 +94,9 @@ public cmd_sage(id)
     set_user_noclip(id, 1);
     set_user_rendering(id, kRenderFxGlowShell, 0, get_pcvar_num(g_pSageGlow), 0, kRenderNormal, 16);
     set_user_maxspeed(id, get_pcvar_float(g_pSageSpeed));
+
+    new dummy;
+    ExecuteForward(g_FwdBecomeSage, dummy, id);
 
     client_print(0, print_chat, "Great Sage activat!");
     cmd_help(id);
@@ -432,3 +448,4 @@ public round_start()
         }
     }
 }
+
