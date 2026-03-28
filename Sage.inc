@@ -13,7 +13,4 @@ forward user_become_sage(id);
  */
 native is_user_sage(id);
 
-/**
- * Seteaza sau scoate statusul de Great Sage pentru un jucator.
- */
-native set_user_sage(id, bool:status);
+
