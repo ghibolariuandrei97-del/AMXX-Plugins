@@ -8,7 +8,7 @@
 #include <cstrike>
 
 #define PLUGIN "Weapons With Levels"
-#define VERSION "1.0"
+#define VERSION "1.1"
 #define AUTHOR "AIs"
 
 #define MAX_WEAPONS 31
@@ -33,9 +33,9 @@ new const g_WeaponNames[][] = {
 public plugin_init() {
     register_plugin(PLUGIN, VERSION, AUTHOR)
     
-    p_DmgPerLvl = register_cvar("amx_weaponlevels_damage", "4.0")
+    p_DmgPerLvl = register_cvar("amx_weaponlevels_damage", "1.2")
     p_RecoilPerLvl = register_cvar("amx_weaponlevels_recoil", "1.0")
-    p_SpeedPerLvl = register_cvar("amx_weaponlevels_speed", "2.0")
+    p_SpeedPerLvl = register_cvar("amx_weaponlevels_speed", "1.0")
     p_DmgProtection = register_cvar("amx_weaponlevels_protection", "1.0") 
     
     register_event("Damage", "event_Damage_Engine", "b", "2!0", "3=0", "4!0")
@@ -84,7 +84,7 @@ public event_Damage_Engine(victim) {
     new attacker = get_user_attacker(victim)
     if(!is_user_alive(victim)) return
     
-    // --- 1. LOGICA DE PROTECTIE (Victima are arma de nivel mare) ---
+    // --- 1. LOGICA DE PROTECTIE ---
     new v_wpn = get_user_weapon(victim)
     new v_level = get_level(g_WeaponXP[victim][v_wpn])
     
@@ -93,17 +93,14 @@ public event_Damage_Engine(victim) {
         if(prot_percent > 0.0) {
             new Float:current_hp; pev(victim, pev_health, current_hp)
             new damage_received = read_data(2)
-            
-            // Calculam cat damage ar trebui sa "anulam"
             new Float:reduction = float(damage_received) * (prot_percent / 100.0)
-            if(reduction > float(damage_received)) reduction = float(damage_received)
             
-            // Adaugam HP inapoi (simularea protectiei)
+            if(reduction > float(damage_received)) reduction = float(damage_received)
             set_pev(victim, pev_health, current_hp + reduction)
         }
     }
 
-    // --- 2. LOGICA DE EXTRA DAMAGE (Atacatorul are arma de nivel mare) ---
+    // --- 2. LOGICA DE EXTRA DAMAGE ---
     if(!is_user_connected(attacker) || !is_user_alive(attacker) || victim == attacker) return
         
     new a_wpn = get_user_weapon(attacker)
@@ -116,22 +113,30 @@ public event_Damage_Engine(victim) {
         
         if(extra_to_apply > 0.1) {
             new Float:vic_hp; pev(victim, pev_health, vic_hp)
-            if(vic_hp - extra_to_apply <= 0.0) make_death(attacker, victim)
-            else set_pev(victim, pev_health, vic_hp - extra_to_apply)
+            
+            // Check if the extra damage will kill them
+            if(vic_hp <= extra_to_apply) {
+                make_death(attacker, victim)
+            } else {
+                set_pev(victim, pev_health, vic_hp - extra_to_apply)
+            }
         }
     }
 }
 
 stock make_death(attacker, victim) {
-    set_msg_block(get_user_msgid("DeathMsg"), BLOCK_ONCE)
-    set_msg_block(get_user_msgid("ScoreInfo"), BLOCK_ONCE)
-    user_kill(victim, 1)
-    
+
+    ExecuteHamB(Ham_Killed, victim, attacker, 0) 
+
     new wpn_id = get_user_weapon(attacker)
     new wpn_name[32]; get_weaponname(wpn_id, wpn_name, 31); replace(wpn_name, 31, "weapon_", "")
     
     message_begin(MSG_ALL, get_user_msgid("DeathMsg"))
-    write_byte(attacker); write_byte(victim); write_byte(0); write_string(wpn_name); message_end()
+    write_byte(attacker)
+    write_byte(victim)
+    write_byte(0)
+    write_string(wpn_name)
+    message_end()
 }
 
 public event_CurWeapon(id) {
