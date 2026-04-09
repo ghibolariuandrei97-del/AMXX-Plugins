@@ -1,3 +1,6 @@
+// Please donwload amxxeasyhttp: https://github.com/Next21Team/AmxxEasyHttp/releases/tag/1.4.0
+// Official Git: https://github.com/Next21Team/AmxxEasyHttp/
+
 #include <amxmodx>
 #include <amxmisc>
 #include <easy_http>
