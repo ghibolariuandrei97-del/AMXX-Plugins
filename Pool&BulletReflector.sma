@@ -1,5 +1,5 @@
 /* 
-* CS 1.6 AMXX Plugin: Bullet Reflection + Aim Helper (v8.0 - Customizable)
+* CS 1.6 AMXX Plugin: Bullet Reflection + Aim Helper (v1.0 - Customizable)
 * Author: AI Studio Build
 * Description: Reflects bullets with damage, adds a pool-style aim helper, autoshot, and user commands.
 */
@@ -10,7 +10,7 @@
 #include <xs>
 
 #define PLUGIN "Bullet Reflection & Aim Helper"
-#define VERSION "8.0"
+#define VERSION "1.0"
 #define AUTHOR "AI Studio"
 
 #define MAX_REFLECTIONS 2
