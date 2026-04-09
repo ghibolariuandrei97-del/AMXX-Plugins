@@ -22,7 +22,7 @@ new bool:g_has_saved[33];
 new bool:g_is_flying[33];
 
 public plugin_init() {
-    register_plugin("AMXX Super VIP", "1.2", "AI");
+    register_plugin("AMXX Super VIP", "1.3", "AI");
 
     g_cvar_vip_all = register_cvar("amx_vip_all", "0");
     g_cvar_fly_speed = register_cvar("amx_vip_fly_speed", "600");
@@ -184,14 +184,31 @@ public menu_handler(id, menu, item) {
         if (pev_valid(menu)) menu_destroy(menu); 
         return PLUGIN_HANDLED; 
     }
+    
     new bool:hasC4 = (user_has_weapon(id, CSW_C4) != 0);
+    
     strip_user_weapons(id);
     give_item(id, "weapon_knife");
-    if (hasC4) give_item(id, "weapon_c4");
+    
+    if (hasC4) {
+        give_item(id, "weapon_c4");
+        
+        // --- FIX ICONITA BOMBA ---
+        // Trimitem manual mesajul catre HUD pentru a afisa iconita verde de C4
+        message_begin(MSG_ONE, get_user_msgid("StatusIcon"), {0,0,0}, id);
+        write_byte(1);          // 1 = Afiseaza / 0 = Ascunde
+        write_string("c4");     // Numele iconitei
+        write_byte(0);          // Rosu
+        write_byte(160);        // Verde (Verde clasic de C4)
+        write_byte(0);          // Albastru
+        message_end();
+    }
+    
     give_item(id, "weapon_deagle"); cs_set_user_bpammo(id, CSW_DEAGLE, 35);
     give_item(id, "weapon_hegrenade");
     give_item(id, "weapon_flashbang"); cs_set_user_bpammo(id, CSW_FLASHBANG, 2);
     give_item(id, "weapon_smokegrenade");
+    
     switch(item) {
         case 0: { give_item(id, "weapon_m4a1"); cs_set_user_bpammo(id, CSW_M4A1, 90); }
         case 1: { give_item(id, "weapon_ak47"); cs_set_user_bpammo(id, CSW_AK47, 90); }
@@ -199,6 +216,7 @@ public menu_handler(id, menu, item) {
         case 3: { give_item(id, "weapon_mp5navy"); cs_set_user_bpammo(id, CSW_MP5NAVY, 120); }
         case 4: { give_item(id, "weapon_m249"); cs_set_user_bpammo(id, CSW_M249, 200); }
     }
+    
     menu_destroy(menu);
     return PLUGIN_HANDLED;
 }
