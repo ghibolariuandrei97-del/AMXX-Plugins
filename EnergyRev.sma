@@ -1,8 +1,8 @@
 /* 
  * Energy Revive Plugin for CS 1.6
  * Generated via CS 1.6 Plugin Studio
- * 
-  */
+*
+ */
 
 #include <amxmodx>
 #include <engine>
@@ -25,9 +25,13 @@ new const REVIVE_HEALTH = 100;
 new p_enemy_mode, p_reward_hp, p_screen_flash;
 new g_msgScreenFade;
 new g_sprite_white, g_sprite_explosion;
+new g_info_target;
 
 public plugin_init() {
     register_plugin(PLUGIN, VERSION, AUTHOR);
+    
+    // Cache the string allocation for performance
+    g_info_target = engfunc(EngFunc_AllocString, "info_target");
     
     // CVARs
     // energyrev_ball: 0=nothing, 1=kill, 2=explosion, 3=delete
@@ -65,52 +69,52 @@ public ev_DeathMsg() {
 }
 
 spawn_energy_ball(id) {
-    new ent = create_entity("info_target");
-    if (!is_valid_ent(ent)) return;
+    new ent = engfunc(EngFunc_CreateNamedEntity, g_info_target);
+    if (!pev_valid(ent)) return;
     
-    entity_set_string(ent, EV_SZ_classname, ENT_CLASSNAME);
+    set_pev(ent, pev_classname, ENT_CLASSNAME);
     
     new CsTeams:team = cs_get_user_team(id);
-    entity_set_int(ent, EV_INT_iuser1, _:team); // Team ID
-    entity_set_int(ent, EV_INT_iuser2, id);    // Victim ID (Owner)
+    set_pev(ent, pev_iuser1, _:team); // Team ID
+    set_pev(ent, pev_iuser2, id);    // Victim ID (Owner)
     
     new Float:origin[3];
-    entity_get_vector(id, EV_VEC_origin, origin);
+    pev(id, pev_origin, origin);
     origin[2] += 15.0;
     
-    entity_set_origin(ent, origin);
-    entity_set_model(ent, "sprites/glow01.spr");
+    set_pev(ent, pev_origin, origin);
+    set_pev(ent, pev_model, "sprites/glow01.spr");
     
-    entity_set_int(ent, EV_INT_solid, SOLID_TRIGGER);
-    entity_set_int(ent, EV_INT_movetype, MOVETYPE_TOSS);
+    set_pev(ent, pev_solid, SOLID_TRIGGER);
+    set_pev(ent, pev_movetype, MOVETYPE_TOSS);
     
     new Float:mins[3], Float:maxs[3];
     mins[0] = -BALL_SIZE; mins[1] = -BALL_SIZE; mins[2] = -BALL_SIZE;
     maxs[0] = BALL_SIZE; maxs[1] = BALL_SIZE; maxs[2] = BALL_SIZE;
-    entity_set_size(ent, mins, maxs);
+    engfunc(EngFunc_SetSize, ent, mins, maxs);
     
-    entity_set_int(ent, EV_INT_rendermode, kRenderTransAdd);
-    entity_set_float(ent, EV_FL_renderamt, 200.0);
-    entity_set_float(ent, EV_FL_scale, 0.5);
+    set_pev(ent, pev_rendermode, kRenderTransAdd);
+    set_pev(ent, pev_renderamt, 200.0);
+    set_pev(ent, pev_scale, 0.5);
     
     if (team == CS_TEAM_T) {
-        entity_set_vector(ent, EV_VEC_rendercolor, Float:{ 255.0, 0.0, 0.0 });
+        set_pev(ent, pev_rendercolor, Float:{ 255.0, 0.0, 0.0 });
     } else {
-        entity_set_vector(ent, EV_VEC_rendercolor, Float:{ 0.0, 0.0, 255.0 });
+        set_pev(ent, pev_rendercolor, Float:{ 0.0, 0.0, 255.0 });
     }
     
-    entity_set_float(ent, EV_FL_nextthink, get_gametime() + BALL_LIFE);
+    set_pev(ent, pev_nextthink, get_gametime() + BALL_LIFE);
 }
 
 public fwd_BallThink(ent) {
-    if (is_valid_ent(ent)) remove_entity(ent);
+    if (pev_valid(ent)) engfunc(EngFunc_RemoveEntity, ent);
 }
 
 public fwd_BallTouch(ent, id) {
-    if (!is_valid_ent(ent) || !is_user_alive(id)) return;
+    if (!pev_valid(ent) || !is_user_alive(id)) return;
     
-    new victim = entity_get_int(ent, EV_INT_iuser2);
-    new ball_team = entity_get_int(ent, EV_INT_iuser1);
+    new victim = pev(ent, pev_iuser2);
+    new ball_team = pev(ent, pev_iuser1);
     new toucher_team = _:cs_get_user_team(id);
     
     if (ball_team == toucher_team) {
@@ -129,10 +133,10 @@ public fwd_BallTouch(ent, id) {
             }
             
             new Float:origin[3];
-            entity_get_vector(victim, EV_VEC_origin, origin);
+            pev(victim, pev_origin, origin);
             create_revive_effect(origin);
             
-            remove_entity(ent);
+            engfunc(EngFunc_RemoveEntity, ent);
         }
     } else {
         // Enemy logic
@@ -140,7 +144,7 @@ public fwd_BallTouch(ent, id) {
         if (mode == 1 || mode == 2) {
             if (mode == 2) {
                 new Float:origin[3];
-                entity_get_vector(ent, EV_VEC_origin, origin);
+                pev(ent, pev_origin, origin);
                 create_explosion_effect(origin);
             }
             
@@ -151,9 +155,9 @@ public fwd_BallTouch(ent, id) {
                 user_kill(id);
             }
             
-            remove_entity(ent);
+            engfunc(EngFunc_RemoveEntity, ent);
         } else if (mode == 3) {
-            remove_entity(ent);
+            engfunc(EngFunc_RemoveEntity, ent);
         }
     }
 }
