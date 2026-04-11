@@ -1,42 +1,42 @@
 /* 
  * Energy Revive Plugin for CS 1.6
  * Generated via CS 1.6 Plugin Studio
-*
+ * 
  */
 
 #include <amxmodx>
 #include <engine>
 #include <fakemeta>
 #include <cstrike>
-#include <hamsandwich>
+#include <fun>
 
 #define PLUGIN "Energy Revive"
-#define VERSION "1.0"
+#define VERSION "0.1"
 #define AUTHOR "AI Studio"
 
 #define ENT_CLASSNAME "energy_revive_ball"
+#define LOGIC_DELAY 1.0
 
 // Configuration Constants
 new const Float:BALL_SIZE = 10.0;
-new const Float:BALL_LIFE = 15.0;
+new const Float:BALL_LIFE = 60.0;
 new const REVIVE_HEALTH = 100;
 
 // CVAR Pointers
 new p_enemy_mode, p_reward_hp, p_screen_flash;
-new g_msgScreenFade;
+new g_msgScreenFade, g_msgDeathMsg;
 new g_sprite_white, g_sprite_explosion;
 new g_info_target;
 
 public plugin_init() {
     register_plugin(PLUGIN, VERSION, AUTHOR);
     
-    // Cache the string allocation for performance
+    // Cache "info_target" for creation. 
     g_info_target = engfunc(EngFunc_AllocString, "info_target");
     
     // CVARs
-    // energyrev_ball: 0=nothing, 1=kill, 2=explosion, 3=delete
-    p_enemy_mode = register_cvar("energyrev_ball", "1");
-    p_reward_hp = register_cvar("energyrev_reward", "15");
+    p_enemy_mode = register_cvar("energyrev_ball", "0");
+    p_reward_hp = register_cvar("energyrev_reward", "10");
     p_screen_flash = register_cvar("energyrev_screen", "1");
     
     register_event("DeathMsg", "ev_DeathMsg", "a");
@@ -46,6 +46,7 @@ public plugin_init() {
     register_think(ENT_CLASSNAME, "fwd_BallThink");
     
     g_msgScreenFade = get_user_msgid("ScreenFade");
+    g_msgDeathMsg = get_user_msgid("DeathMsg");
 }
 
 public plugin_precache() {
@@ -72,7 +73,14 @@ spawn_energy_ball(id) {
     new ent = engfunc(EngFunc_CreateNamedEntity, g_info_target);
     if (!pev_valid(ent)) return;
     
+    // Critical: Initialize the entity first
+    dllfunc(DLLFunc_Spawn, ent);
+    
+    // Set properties AFTER spawn to ensure they aren't reset
     set_pev(ent, pev_classname, ENT_CLASSNAME);
+    set_pev(ent, pev_solid, SOLID_TRIGGER);
+    set_pev(ent, pev_movetype, MOVETYPE_TOSS);
+    engfunc(EngFunc_SetModel, ent, "sprites/glow01.spr");
     
     new CsTeams:team = cs_get_user_team(id);
     set_pev(ent, pev_iuser1, _:team); // Team ID
@@ -81,12 +89,7 @@ spawn_energy_ball(id) {
     new Float:origin[3];
     pev(id, pev_origin, origin);
     origin[2] += 15.0;
-    
     set_pev(ent, pev_origin, origin);
-    set_pev(ent, pev_model, "sprites/glow01.spr");
-    
-    set_pev(ent, pev_solid, SOLID_TRIGGER);
-    set_pev(ent, pev_movetype, MOVETYPE_TOSS);
     
     new Float:mins[3], Float:maxs[3];
     mins[0] = -BALL_SIZE; mins[1] = -BALL_SIZE; mins[2] = -BALL_SIZE;
@@ -113,14 +116,33 @@ public fwd_BallThink(ent) {
 public fwd_BallTouch(ent, id) {
     if (!pev_valid(ent) || !is_user_alive(id)) return;
     
-    new victim = pev(ent, pev_iuser2);
+    // Disable touch and visibility immediately
+    set_pev(ent, pev_solid, SOLID_NOT);
+    set_pev(ent, pev_rendermode, kRenderTransAlpha);
+    set_pev(ent, pev_renderamt, 0.0);
+    
+    new data[2];
+    data[0] = ent;
+    data[1] = id;
+    
+    set_task(LOGIC_DELAY, "task_HandleLogic", ent + 1337, data, 2);
+}
+
+public task_HandleLogic(data[2]) {
+    new ent = data[0];
+    new id = data[1]; // Toucher (Enemy or Teammate)
+    
+    if (!pev_valid(ent) || !is_user_alive(id)) return;
+    
+    new victim = pev(ent, pev_iuser2); // Ball Owner (The one who died)
     new ball_team = pev(ent, pev_iuser1);
     new toucher_team = _:cs_get_user_team(id);
     
     if (ball_team == toucher_team) {
         // Teammate Revive
         if (is_user_connected(victim) && !is_user_alive(victim)) {
-            ExecuteHamB(Ham_CS_RoundRespawn, victim);
+            // Revive without Hamsandwich
+            cs_user_spawn(victim);
             set_user_health(victim, REVIVE_HEALTH);
             
             new reward = get_pcvar_num(p_reward_hp);
@@ -137,6 +159,8 @@ public fwd_BallTouch(ent, id) {
             create_revive_effect(origin);
             
             engfunc(EngFunc_RemoveEntity, ent);
+        } else {
+            engfunc(EngFunc_RemoveEntity, ent);
         }
     } else {
         // Enemy logic
@@ -148,15 +172,28 @@ public fwd_BallTouch(ent, id) {
                 create_explosion_effect(origin);
             }
             
-            // Kill and give credit to the ball owner (victim)
+            // Kill and give credit without Hamsandwich
             if (is_user_connected(victim)) {
-                ExecuteHamB(Ham_Killed, id, victim, 0);
+                // Block the suicide message from user_kill
+                set_msg_block(g_msgDeathMsg, BLOCK_ONCE);
+                user_kill(id);
+                
+                // Update frags manually
+                set_user_frags(victim, get_user_frags(victim) + 1);
+                
+                // Send custom DeathMsg to show the kill in HUD
+                message_begin(MSG_ALL, g_msgDeathMsg);
+                write_byte(victim); // Killer
+                write_byte(id);     // Victim
+                write_byte(0);      // Headshot
+                write_string("energy"); // Weapon name
+                message_end();
             } else {
                 user_kill(id);
             }
             
             engfunc(EngFunc_RemoveEntity, ent);
-        } else if (mode == 3) {
+        } else {
             engfunc(EngFunc_RemoveEntity, ent);
         }
     }
@@ -203,8 +240,4 @@ create_revive_effect(Float:origin[3]) {
     write_byte(40); 
     write_byte(5);  
     message_end();
-}
-
-stock set_user_health(id, health) {
-    set_pev(id, pev_health, float(health));
 }
