@@ -1,15 +1,15 @@
 #include <amxmodx>
 #include <amxmisc>
 
-#define PLUGIN "Temp Admin Vote"
+#define PLUGIN "Temp Admin"
 #define VERSION "1.0"
 #define AUTHOR "AI"
 
 // Cvar Pointers
-new pcv_flags, pcv_noadmins, pcv_unanimous, pcv_votetime, pcv_tag, pcv_minplayers, pcv_allowbots, pcv_selfvote;
+new pcv_flags, pcv_noadmins, pcv_unanimous, pcv_votetime, pcv_tag, pcv_minplayers, pcv_allowbots, pcv_selfvote, pcv_maxadmins;
 
 // Variabile Globale
-new bool:g_admin_elected = false;
+new g_admins_elected_count = 0; // Contorizam cati admini au fost alesi
 new bool:g_vote_in_progress = false;
 new bool:g_vote_this_round = false;
 
@@ -30,7 +30,8 @@ public plugin_init() {
     pcv_tag = register_cvar("amx_voteadmin_tag", "DAEVA");
     pcv_minplayers = register_cvar("amx_voteadmin_minplayers", "2");
     pcv_allowbots = register_cvar("amx_voteadmin_allow_bots", "1");
-    pcv_selfvote = register_cvar("amx_voteadmin_selfvote", "0"); // 1 = Permite votul propriu, 0 = Nu
+    pcv_selfvote = register_cvar("amx_voteadmin_selfvote", "0");
+    pcv_maxadmins = register_cvar("amx_voteadmin_max", "1"); // Cati admini pot fi alesi per harta
 
     register_event("HLTV", "Event_NewRound", "a", "1=0", "2=0");
 }
@@ -47,8 +48,10 @@ print_msg(id, const msg[], any:...) {
 }
 
 public cmd_voteadmin(id) {
-    if (g_admin_elected) {
-        print_msg(id, "Un admin a fost deja ales pentru aceasta harta!");
+    new max_allowed = get_pcvar_num(pcv_maxadmins);
+
+    if (g_admins_elected_count >= max_allowed) {
+        print_msg(id, "S-a atins limita maxima de admini votati (%d) pe aceasta harta!", max_allowed);
         return PLUGIN_HANDLED;
     }
     if (g_vote_in_progress) {
@@ -119,8 +122,10 @@ public show_vote_menu(id) {
     for (new i = 0; i < num; i++) {
         new target = players[i];
         
-        // Verificam daca are voie sa se voteze pe sine
         if (target == id && !can_self_vote) continue; 
+        
+        // Nu are rost sa votam pe cineva care ARE deja admin (ales anterior sau setat manual)
+        if ((get_user_flags(target) & ~ADMIN_USER) > 0) continue;
 
         new name[32], temp_id[10];
         get_user_name(target, name, charsmax(name));
@@ -203,7 +208,9 @@ public end_vote() {
 
         print_msg(0, "^3%s ^1a fost ales admin temporar cu ^4%d ^1voturi!", name, max_votes);
         
-        g_admin_elected = true;
+        g_admins_elected_count++; // Incrementam numarul de admini alesi
         set_user_flags(winner, read_flags(flags_str));
+        
+        print_msg(0, "Admini votati pe aceasta harta: ^4%d/%d", g_admins_elected_count, get_pcvar_num(pcv_maxadmins));
     }
 }
