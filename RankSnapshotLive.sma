@@ -4,7 +4,7 @@
 #include <nvault_util>
 
 new g_Kills[33], g_Deaths[33], g_HS[33], g_Planted[33], g_Defused[33], g_LastRank[33]
-new g_Vault, g_pSaveType, g_pBots
+new g_Vault, g_pBots
 
 public plugin_init() {
     register_plugin("Rank Snapshot Live", "1.0", "AI")
@@ -15,7 +15,6 @@ public plugin_init() {
     register_logevent("log_b_p", 3, "2=Planted_The_Bomb")
     register_logevent("log_b_d", 3, "2=Defused_The_Bomb")
     
-    g_pSaveType = register_cvar("xrank_save_type", "4") 
     g_pBots = register_cvar("xrank_bots", "1")
     g_Vault = nvault_open("rank_snapshot_pro")
 }
@@ -35,7 +34,6 @@ public client_disconnected(id) if (should_h(id)) save_p(id);
 bool:should_h(id) {
     // Daca e bot si cvar-ul e 0, il ignoram. Altfel (daca e player sau bot cu cvar 1), il procesam[cite: 1, 3].
     if (is_user_bot(id) && get_pcvar_num(g_pBots) == 0) return false;
-    if (get_pcvar_num(g_pSaveType) == -1) return false; // Doar pt a folosi cvar-ul sa nu dea warning
     return true;
 }
 
