@@ -4,9 +4,9 @@
 #include <hamsandwich>
 #include <cstrike>
 
-#define PLUGIN "Drone Ghost Final"
-#define VERSION "7.0"
-#define AUTHOR "Gemini_AI"
+#define PLUGIN "Military Drone"
+#define VERSION "1.0"
+#define AUTHOR "Daeva"
 
 new bool:g_IsDrone[33];
 new bool:g_HasDroneAccess[33];
