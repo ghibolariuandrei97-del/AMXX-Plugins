@@ -1,16 +1,15 @@
 #include <amxmodx>
-#include <amxmisc>
 #include <fakemeta>
 
 #define PLUGIN  "AMXX Tags"
-#define VERSION "1.2"
+#define VERSION "1.5"
 #define AUTHOR  "Astarasefk"
 
 #define TASK_SEND_MSG 2000
 #define TASK_RESTORE  3000
 
 #define MAX_NAME_LENGTH 32
-#define MAX_TAG_LENGTH 12
+#define MAX_TAG_LENGTH 12 // Lungimea maxima a tag-ului (inclusiv caracterul null)
 
 enum _:DeathData {
     D_KILLER,
@@ -34,6 +33,10 @@ public plugin_init() {
     // Commands
     register_clcmd("say", "handle_say");
     register_clcmd("say_team", "handle_say");
+    
+    // Menu Command
+    register_clcmd("say /tags", "cmd_show_tags_menu");
+    register_clcmd("say_team /tags", "cmd_show_tags_menu");
 
     // Message IDs
     g_msgDeathMsg = get_user_msgid("DeathMsg");
@@ -59,30 +62,103 @@ public handle_say(id) {
     read_args(szArgs, charsmax(szArgs));
     remove_quotes(szArgs);
 
+    // Ignoara /tags pentru a fi gestionat de cmd_show_tags_menu
+    if (equal(szArgs, "/tags") || equal(szArgs, "/tags ", 6)) {
+        return PLUGIN_CONTINUE;
+    }
+
     if (equal(szArgs, "/tag", 4)) {
-        static szCommand[16], szTag[MAX_TAG_LENGTH];
+        static szCommand[16], szTag[MAX_TAG_LENGTH * 2];
         
         parse(szArgs, szCommand, charsmax(szCommand), szTag, charsmax(szTag));
 
         if (szTag[0] == 0) {
-            client_print(id, print_chat, "* Ca sa iti pui un tag, scrie /tag NUME-TAG sau /tag 0 ca sa-ti scoti tag-ul !");
+            client_print_color(id, print_team_default, "^4* ^1Ca sa iti pui un tag, scrie ^3/tag NUME-TAG ^1sau ^3/tag 0 ^1ca sa-ti scoti tag-ul !");
+            client_print_color(id, print_team_default, "^4* ^1Scrie ^3/tags ^1pentru a vedea ce tag-uri au ceilalti jucatori.");
             return PLUGIN_HANDLED;
         }
 
         if (equal(szTag, "0")) {
             g_szTags[id][0] = 0;
-            client_print(id, print_chat, "* Tag-ul tau a fost scos.");
+            client_print_color(id, print_team_default, "^4* ^1Tag-ul tau a fost ^3scos^1.");
+            return PLUGIN_HANDLED;
+        }
+
+        // Verificare lungime tag
+        if (strlen(szTag) > MAX_TAG_LENGTH - 1) {
+            client_print_color(id, print_team_default, "^4* ^3Eroare! ^1Tag-ul introdus este prea lung! (Maxim ^4%d ^1caractere)", MAX_TAG_LENGTH - 1);
             return PLUGIN_HANDLED;
         }
 
         copy(g_szTags[id], charsmax(g_szTags[]), szTag);
         trim(g_szTags[id]);
-        client_print(id, print_chat, "* Tag-ul tau in killfeed este acum: %s", g_szTags[id]);
+        
+        client_print_color(id, print_team_default, "^4* ^1Tag-ul tau in killfeed este acum: ^4%s", g_szTags[id]);
+        
+        // Verificare lungime nume + tag combinat
+        if (strlen(g_szTags[id]) + 1 + strlen(g_szRealNames[id]) > 31) {
+            client_print_color(id, print_team_default, "^4* ^3Atenție! ^1Numele tău complet va fi scurtat în killfeed din cauza lungimii!");
+        }
         
         return PLUGIN_HANDLED;
     }
     
     return PLUGIN_CONTINUE;
+}
+
+// --- Dynamic Menu /tags ---
+
+public cmd_show_tags_menu(id) {
+    new iMenu = menu_create("\yTag-uri Jucatori Conectati:", "menu_tags_handler");
+    new szItem[64], szUserId[6];
+    new iCount = 0;
+
+    for (new i = 1; i <= MaxClients; i++) {
+        if (!is_user_connected(i) || g_szTags[i][0] == 0)
+            continue;
+
+        num_to_str(get_user_userid(i), szUserId, charsmax(szUserId));
+        formatex(szItem, charsmax(szItem), "\w[%s] \y%s", g_szTags[i], g_szRealNames[i]);
+
+        menu_additem(iMenu, szItem, szUserId);
+        iCount++;
+    }
+
+    if (iCount == 0) {
+        client_print_color(id, print_team_default, "^4* ^1Niciun jucator nu are un tag activ pe server!");
+        menu_destroy(iMenu);
+        return PLUGIN_HANDLED;
+    }
+
+    menu_display(id, iMenu, 0);
+    return PLUGIN_HANDLED;
+}
+
+public menu_tags_handler(id, menu, item) {
+    if (item == MENU_EXIT) {
+        menu_destroy(menu);
+        return PLUGIN_HANDLED;
+    }
+
+    new szData[6], szName[64], access, callback;
+    menu_item_getinfo(menu, item, access, szData, charsmax(szData), szName, charsmax(szName), callback);
+
+    new iUserId = str_to_num(szData);
+    new iTarget = find_player("k", iUserId);
+
+    if (iTarget && g_szTags[iTarget][0] != 0) {
+        copy(g_szTags[id], charsmax(g_szTags[]), g_szTags[iTarget]);
+        client_print_color(id, print_team_default, "^4* ^1Ai copiat tag-ul [^4%s^1] de la ^3%s^1!", g_szTags[id], g_szRealNames[iTarget]);
+
+        if (strlen(g_szTags[id]) + 1 + strlen(g_szRealNames[id]) > 31) {
+            client_print_color(id, print_team_default, "^4* ^3Atenție! ^1Numele tău complet va fi scurtat în killfeed din cauza lungimii!");
+        }
+    } else {
+        client_print_color(id, print_team_default, "^4* ^1Jucătorul respectiv nu mai are acest tag sau s-a deconectat!");
+    }
+
+    menu_destroy(menu);
+    return PLUGIN_HANDLED;
 }
 
 // --- Core KillFeed Logic ---
@@ -160,7 +236,6 @@ public task_clear_swap_flag(id) {
     g_bIsSwapping[id] = false;
 }
 
-// Blocheaza notificarile de sistem din TextMsg
 public hook_SuppressMessages(msg_id, msg_dest, msg_entity) {
     if (msg_id == g_msgTextMsg) {
         static szMsg[64];
@@ -172,12 +247,10 @@ public hook_SuppressMessages(msg_id, msg_dest, msg_entity) {
     return PLUGIN_CONTINUE;
 }
 
-// Blocheaza mesajele de schimbare de nume din SayText (fara sa blocheze chatul normal)
 public hook_SuppressSayText(msg_id, msg_dest, msg_entity) {
     static szMsg[128];
     get_msg_arg_string(2, szMsg, charsmax(szMsg));
 
-    // Daca mesajul vine de la sistem si contine "name" + "changed" sau "next round"
     if (contain(szMsg, "#Cstrike_Name_Change") != -1 || 
        (contain(szMsg, "name") != -1 && contain(szMsg, "changed") != -1) ||
        (contain(szMsg, "name") != -1 && contain(szMsg, "round") != -1)) {
@@ -197,4 +270,13 @@ public client_infochanged(id) {
         copy(g_szRealNames[id], charsmax(g_szRealNames[]), szNewName);
     }
     return PLUGIN_CONTINUE;
+}
+
+public client_disconnected(id)
+{
+    remove_task(id + TASK_RESTORE);
+    remove_task(id + TASK_SEND_MSG);
+
+    g_szTags[id][0] = 0;
+    g_bIsSwapping[id] = false;
 }
