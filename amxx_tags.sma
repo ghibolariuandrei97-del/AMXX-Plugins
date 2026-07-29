@@ -3,7 +3,7 @@
 #include <fakemeta>
 
 #define PLUGIN  "AMXX Tags"
-#define VERSION "1.0"
+#define VERSION "1.2"
 #define AUTHOR  "Astarasefk"
 
 #define TASK_SEND_MSG 2000
@@ -19,9 +19,9 @@ enum _:DeathData {
     D_WEAPON[32]
 }
 
-new g_szTags[MAX_PLAYERS + 1][MAX_TAG_LENGTH];
-new g_szRealNames[MAX_PLAYERS + 1][MAX_NAME_LENGTH];
-new bool:g_bIsSwapping[MAX_PLAYERS + 1];
+new g_szTags[33][MAX_TAG_LENGTH];
+new g_szRealNames[33][MAX_NAME_LENGTH];
+new bool:g_bIsSwapping[33];
 new bool:g_bInternalMsg = false;
 
 new g_msgDeathMsg;
@@ -37,13 +37,13 @@ public plugin_init() {
 
     // Message IDs
     g_msgDeathMsg = get_user_msgid("DeathMsg");
-    g_msgSayText = get_user_msgid("SayText");
-    g_msgTextMsg = get_user_msgid("TextMsg");
+    g_msgSayText  = get_user_msgid("SayText");
+    g_msgTextMsg  = get_user_msgid("TextMsg");
 
     // Hooks
     register_message(g_msgDeathMsg, "hook_DeathMsg");
-    register_message(g_msgSayText, "hook_SuppressMessages");
     register_message(g_msgTextMsg, "hook_SuppressMessages");
+    register_message(g_msgSayText, "hook_SuppressSayText");
 }
 
 public client_putinserver(id) {
@@ -59,27 +59,22 @@ public handle_say(id) {
     read_args(szArgs, charsmax(szArgs));
     remove_quotes(szArgs);
 
-    // Check if the message starts with "/tag"
-    if (bool:equal(szArgs, "/tag", 4)) {
+    if (equal(szArgs, "/tag", 4)) {
         static szCommand[16], szTag[MAX_TAG_LENGTH];
         
-        // Split "/tag" and the actual tag
         parse(szArgs, szCommand, charsmax(szCommand), szTag, charsmax(szTag));
 
-        // Case 1: Just "/tag" (Help)
         if (szTag[0] == 0) {
             client_print(id, print_chat, "* Ca sa iti pui un tag, scrie /tag NUME-TAG sau /tag 0 ca sa-ti scoti tag-ul !");
             return PLUGIN_HANDLED;
         }
 
-        // Case 2: "/tag 0" (Remove)
         if (equal(szTag, "0")) {
             g_szTags[id][0] = 0;
             client_print(id, print_chat, "* Tag-ul tau a fost scos.");
             return PLUGIN_HANDLED;
         }
 
-        // Case 3: "/tag TEST" (Set)
         copy(g_szTags[id], charsmax(g_szTags[]), szTag);
         trim(g_szTags[id]);
         client_print(id, print_chat, "* Tag-ul tau in killfeed este acum: %s", g_szTags[id]);
@@ -107,21 +102,17 @@ public hook_DeathMsg(msg_id, msg_dest, msg_entity) {
     if (!bKillerHasTag && !bVictimHasTag) return PLUGIN_CONTINUE;
 
     if (bKillerHasTag) {
-        new szNewName[MAX_NAME_LENGTH];
-        formatex(szNewName, charsmax(szNewName), "%s %s", g_szTags[killer], g_szRealNames[killer]);
-        set_temp_name(killer, szNewName);
+        set_temp_name(killer);
     }
     if (bVictimHasTag) {
-        new szNewName[MAX_NAME_LENGTH];
-        formatex(szNewName, charsmax(szNewName), "%s %s", g_szTags[victim], g_szRealNames[victim]);
-        set_temp_name(victim, szNewName);
+        set_temp_name(victim);
     }
 
     new data[DeathData];
     data[D_KILLER] = killer;
     data[D_VICTIM] = victim;
     data[D_HS] = get_msg_arg_int(3);
-    get_msg_arg_string(4, data[D_WEAPON], 31);
+    get_msg_arg_string(4, data[D_WEAPON], charsmax(data[D_WEAPON]));
 
     set_task(0.05, "task_send_custom_msg", victim + TASK_SEND_MSG, data, sizeof(data));
 
@@ -138,12 +129,19 @@ public task_send_custom_msg(data[DeathData], taskid) {
     message_end();
     g_bInternalMsg = false;
 
-    set_task(0.1, "task_restore_name", data[D_KILLER] + TASK_RESTORE);
+    if (data[D_KILLER] > 0 && data[D_KILLER] <= MaxClients) {
+        set_task(0.1, "task_restore_name", data[D_KILLER] + TASK_RESTORE);
+    }
     set_task(0.1, "task_restore_name", data[D_VICTIM] + TASK_RESTORE);
 }
 
-set_temp_name(id, const szNewName[]) {
+set_temp_name(id) {
     if (!is_user_connected(id)) return;
+    
+    new szNewName[32];
+    formatex(szNewName, charsmax(szNewName), "%s %s", g_szTags[id], g_szRealNames[id]);
+    szNewName[31] = 0;
+
     g_bIsSwapping[id] = true;
     set_user_info(id, "name", szNewName);
     set_pev(id, pev_netname, szNewName);
@@ -162,16 +160,30 @@ public task_clear_swap_flag(id) {
     g_bIsSwapping[id] = false;
 }
 
+// Blocheaza notificarile de sistem din TextMsg
 public hook_SuppressMessages(msg_id, msg_dest, msg_entity) {
-    static szMsg[64];
     if (msg_id == g_msgTextMsg) {
+        static szMsg[64];
         get_msg_arg_string(2, szMsg, charsmax(szMsg));
-        if (equal(szMsg, "#Cstrike_Name_Change")) return PLUGIN_HANDLED;
+        if (equal(szMsg, "#Cstrike_Name_Change") || contain(szMsg, "Name_Change") != -1) {
+            return PLUGIN_HANDLED;
+        }
     }
-    else if (msg_id == g_msgSayText) {
-        get_msg_arg_string(2, szMsg, charsmax(szMsg));
-        if (contain(szMsg, "name") != -1) return PLUGIN_HANDLED;
+    return PLUGIN_CONTINUE;
+}
+
+// Blocheaza mesajele de schimbare de nume din SayText (fara sa blocheze chatul normal)
+public hook_SuppressSayText(msg_id, msg_dest, msg_entity) {
+    static szMsg[128];
+    get_msg_arg_string(2, szMsg, charsmax(szMsg));
+
+    // Daca mesajul vine de la sistem si contine "name" + "changed" sau "next round"
+    if (contain(szMsg, "#Cstrike_Name_Change") != -1 || 
+       (contain(szMsg, "name") != -1 && contain(szMsg, "changed") != -1) ||
+       (contain(szMsg, "name") != -1 && contain(szMsg, "round") != -1)) {
+        return PLUGIN_HANDLED;
     }
+
     return PLUGIN_CONTINUE;
 }
 
