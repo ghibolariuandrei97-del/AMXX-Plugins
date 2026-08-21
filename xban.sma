@@ -34,7 +34,7 @@ public cmd_xban(id, level, cid)
     if (!g_bExecBan)
     {
         new ban_cmd[128];
-	formatex(ban_cmd, charsmax(ban_cmd), "amx_ban #%d %d %s", get_user_userid(target), str_to_num(minutes), reason);
+		formatex(ban_cmd, charsmax(ban_cmd), "amx_ban #%d %d %s", get_user_userid(target), str_to_num(minutes), reason);
 	     
         
         server_cmd(ban_cmd);       // Trimiți comanda
