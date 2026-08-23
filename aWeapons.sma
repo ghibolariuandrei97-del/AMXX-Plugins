@@ -140,7 +140,7 @@ LoadConfig()
             if (end == -1)
                 continue;
 
-            copy(szSection, end, szLine[1]);
+            copy(szSection, end - 1, szLine[1]);
 
             new cat[CategoryData];
             copy(cat[CAT_NAME], charsmax(cat[CAT_NAME]), szSection);
@@ -265,7 +265,7 @@ public Cmd_OpenMenu(id)
 
 ShowMainMenu(id)
 {
-    new menu = menu_create("\ySkin Models Menu \r[/skin /shop]", "MainMenu_Handler");
+    new menu = menu_create("\ySkin Models Menu \r[/skin sau apasa N]", "MainMenu_Handler");
 
     for (new i = 0; i < g_iCategoryCount; i++)
     {
